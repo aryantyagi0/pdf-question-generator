@@ -1,0 +1,86 @@
+
+ !pip install pymupdf pillow transformers torch torchvision
+
+import fitz  
+import os
+import json
+from PIL import Image
+from transformers import BlipProcessor, BlipForConditionalGeneration
+import torch
+import glob
+
+# ---------- PART 1: PDF CONTENT EXTRACTION ----------
+
+def extract_pdf_content(pdf_path, output_image_dir="pdf_images", json_output="structured_output.json"):
+    os.makedirs(output_image_dir, exist_ok=True)
+    doc = fitz.open(pdf_path)
+    extracted_content = []
+
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        text = page.get_text()
+        images_info = []
+
+        for img_index, img in enumerate(page.get_images(full=True)):
+            xref = img[0]
+            base_image = doc.extract_image(xref)
+            image_bytes = base_image["image"]
+            image_ext = base_image["ext"]
+            image_filename = f"page{page_num+1}_image{img_index+1}.{image_ext}"
+            image_path = os.path.join(output_image_dir, image_filename)
+
+            with open(image_path, "wb") as f:
+                f.write(image_bytes)
+
+            images_info.append(image_path)
+
+        extracted_content.append({
+            "page": page_num + 1,
+            "text": text.strip(),
+            "images": images_info
+        })
+
+    with open(json_output, "w", encoding="utf-8") as f:
+        json.dump(extracted_content, f, indent=2)
+
+    print(f"✅ PDF content extracted and saved to {json_output}")
+
+
+# ---------- PART 2: AI-BASED QUESTION GENERATION ----------
+
+def generate_caption(image_path, processor, model, device="cpu"):
+    image = Image.open(image_path).convert('RGB').resize((384, 384))
+    inputs = processor(image, return_tensors="pt").to(device)
+    output = model.generate(**inputs)
+    return processor.decode(output[0], skip_special_tokens=True)
+
+
+def generate_ai_questions(image_folder="pdf_images", output_file="ai_generated_questions.json"):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
+
+    image_paths = glob.glob(os.path.join(image_folder, "*.png"))
+    qa_list = []
+
+    for img in image_paths:
+        caption = generate_caption(img, processor, model, device)
+        question = f"What is shown in the image: '{caption}'?"
+        qa_list.append({
+            "question": question,
+            "images": img,
+            "option_images": []
+        })
+
+    with open(output_file, "w") as f:
+        json.dump(qa_list, f, indent=2)
+
+    print(f"✅ AI-generated questions saved to {output_file}")
+
+
+# ---------- MAIN EXECUTION ----------
+
+if __name__ == "__main__":
+    pdf_path = "your_file.pdf"  # Change this to your PDF file name
+    extract_pdf_content(pdf_path)
+    generate_ai_questions()
