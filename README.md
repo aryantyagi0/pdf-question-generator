@@ -1,4 +1,9 @@
+## ▶️ Run in Google Colab
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/aryantyagi0/pdf-question-generator/blob/main/assignment.ipynb)
+
 # 📘 PDF Visual Question Generator – Internship Assignment
+
 
 This project was completed as part of an internship assignment. The goal was to build a Python-based tool that extracts content from an educational PDF and uses AI to generate visual questions from the extracted images.
 
